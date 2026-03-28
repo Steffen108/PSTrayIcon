@@ -1,4 +1,4 @@
-﻿Function Get-MemoryMappedFile {
+Function Get-MemoryMappedFile {
     [CmdletBinding()]Param(
         [Parameter(Mandatory=$true)][ValidateNotNullOrEmpty()]
         [System.String]$Name,
@@ -17,7 +17,7 @@
         [System.String]$MapName    = "$($Scope)\$($Name)"
         
         # Add type for reading existing MemoryMappedFiles
-        if (-not (Get-Variable -Name "MMFHelper" -Scope 'Global' -ValueOnly -ErrorAction Ignore)) {
+        if (-not (Get-Variable -Name "MMFHelper" -Scope 'Global' -ErrorAction Ignore)) {
             $Global:MMFHelper = Add-Type -PassThru -TypeDefinition @"
                 using System;
                 using System.Runtime.InteropServices;
@@ -120,7 +120,7 @@ Function Set-MemoryMappedFile {
         [System.Management.Automation.SwitchParameter]$WriteHost,
         [System.Management.Automation.SwitchParameter]$WriteHostResultsOnly
     )
-    
+
     try {
         # Define variables with initial values
         [System.Text.Encoding]$enc = [System.Text.Encoding]::UTF8
@@ -128,7 +128,7 @@ Function Set-MemoryMappedFile {
         [System.String]$MapName    = "$($Scope)\$($Name)"
 
         # Add type for reading existing MemoryMappedFiles
-        if (-not (Get-Variable -Name "MMFHelper" -Scope 'Global' -ValueOnly -ErrorAction Ignore)) {
+        if (-not (Get-Variable -Name "MMFHelper" -Scope 'Global' -ErrorAction Ignore)) {
             $Global:MMFHelper = Add-Type -PassThru -TypeDefinition @"
                 using System;
                 using System.Runtime.InteropServices;
@@ -266,6 +266,7 @@ Function Set-MemoryMappedFile {
         [System.String]$fillVal    = [System.Char][System.Byte]0
         [System.String]$val        = [System.String]::Empty
         [System.Byte[]]$buffer     = [System.Byte[]]::new($Size)
+
         while ($true) {
             # Check for timeout
             if ($TimeoutInSeconds -gt 0) {if ($i -ge $TimeoutInSeconds) {break}}
@@ -304,104 +305,6 @@ Function Set-MemoryMappedFile {
         if ($null -ne $mmf)      {$mmf.Dispose()}
         if ($handle -ne [IntPtr]::Zero) {[System.Boolean]$cHResult = [MMFHelper]::CloseHandle($handle); $handle = [IntPtr]::Zero}
         [System.GC]::Collect()
-    }
-}
-
-Function Set-TrayIconSettingPersistent {
-    Param (
-        [System.Boolean]$State = $true,
-        [Parameter(Mandatory=$true)]
-        [System.Management.Automation.PSReference]$Data,
-        [System.String]$MmfName,
-        [ValidateSet('Local','Global')]
-        [System.String]$MmfScope               = 'Local',
-        [System.Int32]$TimeoutInSeconds        = 0,
-        [System.Int32]$WritingPauseInSeconds   = 1,
-        [System.Management.Automation.SwitchParameter]$WriteHost
-    )
-
-    try {
-        # Checks
-            # Admin permissions required
-            if ($Scope -eq 'Global') {
-                $isAdmin = ([Security.Principal.WindowsPrincipal]([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-                if (-not $isAdmin) {throw 'Admin permissions required to start MemoryMappedFile with scope Global!'}
-            }
-
-            # Referenced data value
-            if ($null -eq $Data) {throw 'Data parameter value can not be null!'}
-            if ($Data.Value.GetType().Name -ne 'String') {throw 'Data parameter value type has to be String!'}
-
-        # Start process
-        switch ($State) {
-            $true {
-                # Check Name value
-                if ([System.String]::IsNullOrWhiteSpace($MmfName)) {throw 'MmfName parameter value can not be null or whitespaces only!'}
-                
-                # Create parameters dictionary
-                [System.Collections.IDictionary]$dict = @{
-                    Data                  = $Data
-                    Name                  = $MmfName
-                    Scope                 = $MmfScope
-                    TimeoutInSeconds      = $TimeoutInSeconds
-                    WritingPauseInSeconds = $WritingPauseInSeconds
-                }
-                
-                # Start Runspace and return info
-                [System.String]$sct            = "Set-MemoryMappedFile"
-                [System.String]$sctContent     = $(Get-Command -Name $sct).Definition
-                if ($WriteHost) {Write-Host "Starting runspace with script '$sct' and parameters (Name=$($MmfName) | Scope=$($MmfScope) | TimeoutInSeconds=$($TimeoutInSeconds) | WritingPauseInSeconds=$($WritingPauseInSeconds))..."}
-                $Script:PowershellRunspaceRaw  = $([System.Management.Automation.Powershell]::Create([System.Management.Automation.RunspaceMode]::NewRunspace))
-                $Script:PowershellRunspace     = $PowershellRunspaceRaw.AddScript($sctContent).AddParameters($dict)
-                $Script:PowershellHandle       = $Script:PowershellRunspace.BeginInvoke()
-                if ($WriteHost) {
-                    Write-Host (
-                        "Runspace stats: " + `
-                        "Name=$($Script:PowershellRunspace.Runspace.Name) | " + `
-                        "Id=$($Script:PowershellRunspace.Runspace.Id) | " + `
-                        "InstanceId=$($Script:PowershellRunspace.Runspace.InstanceId) | " + `
-                        "Handle=$($Script:PowershellHandle.AsyncWaitHandle.Handle)"
-                    )
-                }
-
-                # Return
-                return $true
-            }
-            $false {
-                # Stop Runspace and return info
-                if (Get-Variable -Name 'PowershellRunspace' -Scope 'Script' -ValueOnly -ErrorAction Ignore) {
-                    if ($WriteHost) {Write-Host "Stopping runspace..."}
-                    [System.String]$dataMemory      = $Data.Value
-                    $Data.Value                    = 'StopMmfWriting'
-                    [System.Object]$result         = $Script:PowershellRunspace.EndInvoke($Script:PowershellHandle)
-                    $Data.Value                    = [System.String]$dataMemory
-                    $Script:PowershellRunspace.Dispose()
-                    $Script:PowershellRunspaceRaw.Dispose()
-                    $Script:PowershellHandle       = $null
-                    $Script:PowershellRunspace     = $null
-                    $Script:PowershellRunspaceRaw  = $null
-                }
-
-                # Return result
-                return $result
-            }
-        }
-    }
-    catch {
-        # Error handling
-        Write-Host $($_ | Out-String).Trim() -ForegroundColor Yellow
-
-        # Unload objects
-        if (Get-Variable -Name 'PowershellRunspace' -Scope 'Script' -ValueOnly -ErrorAction Ignore) {
-            $Script:PowershellRunspace.Dispose()
-            $Script:PowershellRunspaceRaw.Dispose()
-            $Script:PowershellHandle       = $null
-            $Script:PowershellRunspace     = $null
-            $Script:PowershellRunspaceRaw  = $null
-        }
-
-        # Return
-        return $false
     }
 }
 
@@ -858,8 +761,8 @@ Function Show-TrayIconPersistent {
         [System.DateTime]$resultDateTime = Get-Date
         while ($true) {
             # Reset check values
-            [System.Boolean]$timestampKey   = [System.String]::Empty
-            [System.Boolean]$timestampVal   = [System.String]::Empty
+            [System.String] $timestampKey   = [System.String]::Empty
+            [System.String] $timestampVal   = [System.String]::Empty
             [System.Boolean]$timestampValid = $true
             
             # Get info from sender
@@ -945,11 +848,14 @@ Function Show-TrayIconPersistent {
             # Stop Runspace and collect information
             $Script:TrayIconDir.Running    = $false
             [System.Object]$rsInfo         = $Script:PowershellRunspace.Streams.Information
-            [System.Object]$result         = $Script:PowershellRunspace.EndInvoke($Script:PowershellHandle)
             Write-Output $rsInfo
-            
+            [System.Int32]$i               = 0
+            [System.Int32]$iMax            = 15
+            while ($i -lt $iMax) {if ($Script:PowershellHandle.IsCompleted -eq $true) {break}; Start-Sleep -Seconds 1; $i++}
+            if ($i -lt $iMax) {[System.Object]$result = $Script:PowershellRunspace.EndInvoke($Script:PowershellHandle)} 
+
             # Unload objects
-            if (Get-Variable -Name 'PowershellRunspace' -Scope 'Script' -ValueOnly -ErrorAction Ignore) {
+            if (Get-Variable -Name 'PowershellRunspace' -Scope 'Script' -ErrorAction Ignore) {
                 $Script:PowershellRunspace.Dispose()
                 $Script:PowershellRunspaceRaw.Dispose()
                 $Script:PowershellRunspace     = $null
@@ -970,9 +876,9 @@ Function Set-TrayIconState {
         Displaying a tray icon in the windows tray icon area (right side of the taskbar). 
         The tray icon runs via a separate script (created by this function). Dynamic updates will be invoked asynchronously via a Runspace and MemoryMappedFile reading process.
         This function also acts as a sender writing asyncrouniously a SettingString in a MemoryMappedFile to update the values of the tray icon.
-    .PARAMETER ActionType
-        Aliases:                     Enabled
-        DataType:                    Boolean
+    .PARAMETER Action
+        DataType:                    String
+        Notes:                       Type of action (Start, Stop or Change)
     .PARAMETER TrayIconTitle
         Aliases:                     Title
         DataType:                    String
@@ -1008,31 +914,14 @@ Function Set-TrayIconState {
         DataType:                    String
         Notes:                       Full path to the file
                                      If the path do not exist the tray icon will hide the button.
-    .PARAMETER TrayIconFilePathOverviewUpdated
-        Aliases:                     FilePathOverviewUpdated, OverviewUpdated
-        DataType:                    Boolean
-        Notes:                       Tray icon will only update the file path if this value is set to true.
-    .PARAMETER TrayIconFilePathLogUpdated
-        Aliases:                     FilePathLogUpdated, LogUpdated
-        DataType:                    Boolean
-        Notes:                       Tray icon will only update the file path if this value is set to true.
-    .PARAMETER TrayIconFilePathImageUpdated
-        Aliases:                     FilePathImageUpdated, ImageUpdated
-        DataType:                    Boolean
-        Notes:                       Tray icon will only update the file path if this value is set to true.
-    .PARAMETER TrayIconFilePathTitleImageUpdated
-        Aliases:                     FilePathTitleImageUpdated, TitleImageUpdated
-        DataType:                    Boolean
-        Notes:                       Tray icon will only update the file path if this value is set to true.
     .PARAMETER TrayIconUserExitAllowed
         Aliases:                     UserExitAllowed, UserExitEnabled
         DataType:                    Boolean
         Notes:                       Tray icon will only update the file path if this value is set to true.
-    .PARAMETER SettingString
-        Aliases:                     Setting
-        DataType:                    System.Management.Automation.PSReference
-        Notes:                       Must be defined as reference, e. g. [ref]$Global:TrayIconSettingString
-                                     Reference object must be a string.
+    .PARAMETER TempPath
+        Aliases:                     TempDirectory, TempDir
+        DataType:                    String
+        Notes:                       Path to create the client part script to show the tray icon
     .PARAMETER MmfName
         Aliases:                     Name
         DataType:                    String
@@ -1047,93 +936,73 @@ Function Set-TrayIconState {
     .PARAMETER ReadingPauseInSeconds
         Aliases:                     PauseInSeconds, Pause
         DataType:                    Int32
-    .PARAMETER TempPath
-        Aliases:                     TempDirectory, TempDir
-        DataType:                    String
-        Notes:                       Path to create the client part script to show the tray icon
     .PARAMETER PassThru
         DataType:                    Switch
         Notes:                       Returning the result of the MemoryMappedFile writer.
     .INPUTS
         No pipeline input or default value accepted (will be arguments order).
-        SettingString and MmfName are mandatory.
     .OUTPUTS
         Boolean for success
     .NOTES
-        Created by Steffen Spanknebel, 34134 Kassel, Germany, at 2026-03-21.
+        Created by Steffen Spanknebel, 34134 Kassel, Germany, at 2026-03-28.
     .LINK
         None
     #>
 
     [CmdletBinding()]Param (
-        [Alias('Enabled')]
-        [System.Boolean]$State                               = $true,
+        [ValidateSet('Start', 'Change', 'Stop')]
+        [System.String]$Action,
 
         [Alias('Title')]
-        [System.String]$TrayIconTitle                        = "<No title defined>",
+        [System.String]$TrayIconTitle                            = "<No title defined>",
 
         [Alias('Subtitle')]
-        [System.String]$TrayIconSubtitle                     = "<No subtitle defined>",
+        [System.String]$TrayIconSubtitle                         = "<No subtitle defined>",
 
         [Alias('MenuTextOverviewFile', 'MenuTextOverview', 'ButtonOverviewFile', 'ButtonOverview')]
-        [System.String]$TrayIconMenuTextOverviewFile         = "Open overview file",
+        [System.String]$TrayIconMenuTextOverviewFile             = "Open overview file",
 
         [Alias('MenuTextLogFile', 'MenuTextLog', 'ButtonLogFile', 'ButtonLog')]
-        [System.String]$TrayIconMenuTextLogFile              = "Open log file",
+        [System.String]$TrayIconMenuTextLogFile                  = "Open log file",
 
         [Alias('MenuTextExit', 'ButtonExit')]
-        [System.String]$TrayIconMenuTextExit                 = "Exit",
+        [System.String]$TrayIconMenuTextExit                     = "Exit",
 
         [Alias('FilePathOverview')]
-        [System.String]$TrayIconFilePathOverview             = [System.String]::Empty,
+        [System.String]$TrayIconFilePathOverview                 = [System.String]::Empty,
 
         [Alias('FilePathLog')]
-        [System.String]$TrayIconFilePathLog                  = [System.String]::Empty,
+        [System.String]$TrayIconFilePathLog                      = [System.String]::Empty,
 
         [Alias('FilePathImage')]
-        [System.String]$TrayIconFilePathImage                = [System.String]::Empty,
+        [System.String]$TrayIconFilePathImage                    = [System.String]::Empty,
 
         [Alias('FilePathTitleImage')]
-        [System.String]$TrayIconFilePathTitleImage           = [System.String]::Empty,
-
-        [Alias('FilePathOverviewUpdated', 'OverviewUpdated')]
-        [System.Boolean]$TrayIconFilePathOverviewUpdated     = $false,
-
-        [Alias('FilePathLogUpdated', 'LogUpdated')]
-        [System.Boolean]$TrayIconFilePathLogUpdated          = $false,
-
-        [Alias('FilePathImageUpdated', 'ImageUpdated')]
-        [System.Boolean]$TrayIconFilePathImageUpdated        = $false,
-
-        [Alias('FilePathTitleImageUpdated', 'TitleImageUpdated')]
-        [System.Boolean]$TrayIconFilePathTitleImageUpdated   = $false,
+        [System.String]$TrayIconFilePathTitleImage               = [System.String]::Empty,
 
         [Alias('UserExitAllowed', 'UserExitEnabled')]
-        [System.Boolean]$TrayIconUserExitAllowed             = $false,
+        [System.Boolean]$TrayIconUserExitAllowed                 = $false,
 
-        [Parameter(Mandatory=$true)]
-        [Alias('Setting')]
-        [System.Management.Automation.PSReference]$SettingString,
-
-        [Parameter(Mandatory=$true)]
         [Alias('Name')]
         [ValidateNotNullOrEmpty()]
-        [System.String]$MmfName,
+        [System.String]$MmfName                                  = 'TrayIcon',
+                                                                 
+        [Alias('Scope')]                                         
+        [ValidateSet('Local','Global')]                          
+        [System.String]$MmfScope                                 = 'Local',
+                                                                 
+        [Alias('TimeoutInSeconds', 'Timeout')]                   
+        [System.Int32]$NoNewDataTimeoutInSeconds                 = 15,
+                                                                 
+        [Alias('PauseInSeconds', 'Pause')]                       
+        [System.Int32]$ReadingPauseInSeconds                     = 1,
+                                                                 
+        [Alias('TempDirectory', 'TempDir')]                      
+        [System.String]$TempPath                                 = $env:TEMP,
 
-        [Alias('Scope')]
-        [ValidateSet('Local','Global')]
-        [System.String]$MmfScope                             = 'Local',
+        [System.Management.Automation.SwitchParameter]$PassThru,
 
-        [Alias('TimeoutInSeconds', 'Timeout')]
-        [System.Int32]$NoNewDataTimeoutInSeconds             = 15,
-
-        [Alias('PauseInSeconds', 'Pause')]
-        [System.Int32]$ReadingPauseInSeconds                 = 1,
-
-        [Alias('TempDirectory', 'TempDir')]
-        [System.String]$TempPath                             = $env:TEMP,
-
-        [System.Management.Automation.SwitchParameter]$PassThru
+        [System.Management.Automation.SwitchParameter]$WriteHost
     )
 
     try {
@@ -1143,26 +1012,26 @@ Function Set-TrayIconState {
             if (-not $isAdmin) {throw 'Admin permissions required to start Set-TrayIconState with scope Global!'}
         }
 
-        # Check referenced data type
-        if ($null -eq $SettingString)                         {throw 'SettingString parameter value can not be null!'}
-        if ($SettingString.Value.GetType().Name -ne 'String') {throw 'SettingString parameter value type has to be String!'}
-
         # Check if temp path is available
         if (-not (Test-Path -Path $TempPath)) {throw 'Defined temp path is not available!'}
 
-        switch ($State) {
-            $true{
+        # Define variables
+        [System.Object]$returnVal = $true
+
+        # Set values
+        if (-not (Get-Variable -Name "TrayIconSettingString" -Scope 'Script' -ErrorAction Ignore)) {New-Variable -Name "TrayIconSettingString" -Scope 'Script' -Value ([System.String]::Empty) -Force}
+        [System.Management.Automation.PSReference]$SettingString = [Ref]$Script:TrayIconSettingString
+
+        switch ($Action) {
+            'Start' {
                 # Client part
                     # Build script
                         # Section for functions
-                        [System.String]$fcnTmp = $(Get-Command -Name @('Show-TrayIconPersistent','Get-MemoryMappedFile') -CommandType Function) | `
-                            ForEach-Object -Process {"Function $($_.Name) {$($_.Definition)}`n`n"}
+                        [System.String]$fcnTmp = $(Get-Command -Name @('Show-TrayIconPersistent','Get-MemoryMappedFile') -CommandType Function) | ForEach-Object -Process {"Function $($_.Name) {$($_.Definition)}`n`n"}
     
                         # Section for invocation
                         [System.String]$invTmp = @"
                             `$ErrorActionPreference = 'Stop'
-                            Clear-Host
-
                             `$TrayIconData                   = [Hashtable]@{
                                 Title                        = `"$($TrayIconTitle)`"
                                 Subtitle                     = `"$($TrayIconSubtitle)`"
@@ -1173,11 +1042,11 @@ Function Set-TrayIconState {
                                 FilePathLog                  = `"$($TrayIconFilePathLog)`"
                                 FilePathImage                = `"$($TrayIconFilePathImage)`"
                                 FilePathTitleImage           = `"$($TrayIconFilePathTitleImage)`"
-                                FilePathOverviewUpdated      = $(if ($TrayIconFilePathOverviewUpdated)   {'$true'} else {'$false'})
-                                FilePathLogUpdated           = $(if ($TrayIconFilePathLogUpdated)        {'$true'} else {'$false'})
-                                FilePathImageUpdated         = $(if ($TrayIconFilePathImageUpdated)      {'$true'} else {'$false'})
-                                FilePathTitleImageUpdated    = $(if ($TrayIconFilePathTitleImageUpdated) {'$true'} else {'$false'})
-                                UserExitAllowed              = $(if ($TrayIconUserExitAllowed)           {'$true'} else {'$false'})
+                                FilePathOverviewUpdated      = '$true'
+                                FilePathLogUpdated           = '$true'
+                                FilePathImageUpdated         = '$true'
+                                FilePathTitleImageUpdated    = '$true'
+                                UserExitAllowed              = $(if ($TrayIconUserExitAllowed) {'$true'} else {'$false'})
                             }
 
                             [System.String]`$logFile         = "`$([System.IO.Path]::GetDirectoryName(`$MyInvocation.MyCommand.Definition))\`$([System.IO.Path]::GetFileNameWithoutExtension(`$MyInvocation.MyCommand.Definition)).log"
@@ -1203,31 +1072,98 @@ Function Set-TrayIconState {
                     # Start script
                     [System.String]$psExe    = "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
                     [System.String]$psParams = "-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy ByPass -File `"$TempScriptPath`""
-                    $result = Start-Process -FilePath $psExe -ArgumentList $psParams -WindowStyle Hidden -PassThru
+                    $result                  = Start-Process -FilePath $psExe -ArgumentList $psParams -WindowStyle Hidden -PassThru
 
                 # Server part
                     # Start process
-                    $result = Set-TrayIconSettingPersistent -State $State -Data $SettingString -MmfName $MmfName -MmfScope $MmfScope -TimeoutInSeconds 0 -WritingPauseInSeconds 1 -WriteHost
-                    if ($result -eq $false) {return $false}
+                        # Create parameters dictionary
+                        [System.Collections.IDictionary]$dict = @{
+                            Data                  = $SettingString
+                            Name                  = $MmfName
+                            Scope                 = $MmfScope
+                            TimeoutInSeconds      = 0
+                            WritingPauseInSeconds = 1
+                        }
+                
+                        # Start Runspace and return info
+                        [System.String]$sct            = "Set-MemoryMappedFile"
+                        [System.String]$sctContent     = $(Get-Command -Name $sct).Definition
+                        if ($WriteHost) {
+                            Write-Host (
+                                "Starting runspace with script '$sct' and parameters " + `
+                                "(Name=$($dict.Name) | Scope=$($dict.Scope) | TimeoutInSeconds=$($dict.TimeoutInSeconds) | WritingPauseInSeconds=$($dict.WritingPauseInSeconds))..."
+                            )
+                        }
+                        $Script:PowershellRunspaceRaw  = $([System.Management.Automation.Powershell]::Create([System.Management.Automation.RunspaceMode]::NewRunspace))
+                        $Script:PowershellRunspace     = $PowershellRunspaceRaw.AddScript($sctContent).AddParameters($dict)
+                        $Script:PowershellHandle       = $Script:PowershellRunspace.BeginInvoke()
+                        if ($WriteHost) {
+                            Write-Host (
+                                "Runspace stats: " + `
+                                "Name=$($Script:PowershellRunspace.Runspace.Name) | " + `
+                                "Id=$($Script:PowershellRunspace.Runspace.Id) | " + `
+                                "InstanceId=$($Script:PowershellRunspace.Runspace.InstanceId) | " + `
+                                "Handle=$($Script:PowershellHandle.AsyncWaitHandle.Handle)"
+                            )
+                        }
 
-                # Return process result
-                if ($PassThru) {return $result}
-                return $true
+
+                    $result = Set-TrayIconSettingPersistent -State $true -Data $SettingString -MmfName $MmfName -MmfScope $MmfScope -TimeoutInSeconds 0 -WritingPauseInSeconds 1 -WriteHost
+                    $returnVal = $result
+                    
+                break
             }
-            $false {
+            'Change' {
+                [System.Text.StringBuilder]$SettingSb = [System.Text.StringBuilder]::new()
+                $keys = $MyInvocation.BoundParameters.Keys | ? {$_ -like "TrayIcon*"}
+                foreach ($key in $keys) {
+                    $SettingSb.Append("$($key.Replace('TrayIcon', ''))=$($MyInvocation.BoundParameters.$key);") | Out-Null
+                    if ($key -like "TrayIconFilePath*") {$SettingSb.Append("$($key.Replace('TrayIcon', ''))Updated=true;") | Out-Null}
+                }
+                $Script:TrayIconSettingString = $SettingSb.ToString().TrimEnd(';')
+                break
+            }
+            'Stop' {
                 # Server part
                     # Stop process
-                    $result = Set-TrayIconSettingPersistent -State $State -Data $SettingString -MmfName $MmfName
-                    if ($result -eq $false) {return $false}
-                    return $true
+                    if (Get-Variable -Name 'PowershellRunspace' -Scope 'Script' -ErrorAction Ignore) {
+                        if ($WriteHost) {Write-Host "Stopping runspace..."}
+                        [System.String]$dataMemory     = $Script:TrayIconSettingString
+                        $Script:TrayIconSettingString  = 'StopMmfWriting'
+                        [System.Int32]$i               = 0
+                        [System.Int32]$iMax            = 15
+                        while ($i -lt $iMax) {if ($Script:PowershellHandle.IsCompleted -eq $true) {break}; Start-Sleep -Seconds 1; $i++}
+                        if ($i -lt $iMax) {[System.Object]$result = $Script:PowershellRunspace.EndInvoke($Script:PowershellHandle)} 
+                        $Script:TrayIconSettingString  = [System.String]$dataMemory
+                        $Script:PowershellRunspace.Dispose()
+                        $Script:PowershellRunspaceRaw.Dispose()
+                        $Script:PowershellHandle       = $null
+                        $Script:PowershellRunspace     = $null
+                        $Script:PowershellRunspaceRaw  = $null
+                    }
+                    $Script:TrayIconSettingString = [System.String]::Empty
+                    $returnVal = $result
+                    
+                break
             }
         }
     }
     catch {
         # Error handling
         Write-Host $($_ | Out-String -Width 1024).Trim() -ForegroundColor Yellow
-        return $false
+        $returnVal = $false
+
+        # Unload objects
+        if (Get-Variable -Name 'PowershellRunspace' -Scope 'Script' -ErrorAction Ignore) {
+            $Script:PowershellRunspace.Dispose()
+            $Script:PowershellRunspaceRaw.Dispose()
+            $Script:PowershellHandle       = $null
+            $Script:PowershellRunspace     = $null
+            $Script:PowershellRunspaceRaw  = $null
+        }
     }
+
+    if ($PassThru) {return $returnVal}
 }
 
 
@@ -1235,13 +1171,8 @@ Function Set-TrayIconState {
 $ErrorActionPreference = 'Stop'
 Clear-Host
 
-[System.Int32] $pauseDur                     = 5
-[System.String]$Global:TrayIconSettingString = [System.String]::Empty
 [System.Collections.Hashtable]$Params        = @{
-    SettingString                            = $([ref]$Global:TrayIconSettingString)
-    MmfName                                  = 'SPKTrayIcon'
-    MmfScope                                 = 'Local'
-    TrayIconTitle                            = "accompio Software Packaging Kit"
+    TrayIconTitle                            = "Software Packaging Kit"
     TrayIconSubtitle                         = "Initializing ..."
     TrayIconFilePathOverview                 = "C:\Temp\PackageOverview.txt"
     TrayIconFilePathLog                      = "C:\Temp\Package.log"
@@ -1250,27 +1181,19 @@ Clear-Host
     TrayIconMenuTextOverviewFile             = 'Übersicht anzeigen'
     TrayIconMenuTextLogFile                  = 'Protokoll anzeigen'
     TrayIconMenuTextExit                     = 'Beenden'
-    NoNewDataTimeoutInSeconds                = 15
 }
+[System.Int32] $pauseDur                     = 3
 
-if (-not (Set-TrayIconState -State $true @Params)) {return}
-
+if (-not (Set-TrayIconState -Action Start @Params -PassThru)) {return}
 Start-Sleep -Seconds $pauseDur
-$Global:TrayIconSettingString = "Title=First TITLE; Subtitle = First Subtitle"
+Set-TrayIconState -Action Change -TrayIconTitle "First TITLE" -TrayIconSubtitle "First Subtitle"
 Start-Sleep -Seconds $pauseDur
-$Global:TrayIconSettingString = "Title=Install Google Chrome 1.2.3; Subtitle = Phase: Install application"
+Set-TrayIconState -Action Change -TrayIconTitle "Install Google Chrome 1.2.3" -TrayIconSubtitle "Phase: Install application"
 Start-Sleep -Seconds $pauseDur
-$Global:TrayIconSettingString = "FilePathImage=C:\Temp\Hello.png;FilePathImageUpdated=true; UserExitAllowed=true"
+Set-TrayIconState -Action Change -TrayIconTitle "First TITLE"  -TrayIconFilePathImage "C:\Temp\Hello.png"
 Start-Sleep -Seconds $pauseDur
-$Global:TrayIconSettingString = "Title=This TITLE is loooooooooooooooooooooooooooooooooooooooooooooog; FilePathTitleImage=C:\Temp\Hello.png;FilePathTitleImageUpdated=true"
+Set-TrayIconState -Action Change -TrayIconTitle "This TITLE is loooooooooooooooooooooooooooooooooooooooooooooog" -TrayIconSubtitle "First Subtitle"
 Start-Sleep -Seconds $pauseDur
-$Global:TrayIconSettingString = "Title=The last TITLE; Subtitle = Subtitle as end`nwith this new line`nand with this new line; FilePathTitleImage=C:\Temp\Hello.png;FilePathTitleImageUpdated=true"
+Set-TrayIconState -Action Change -TrayIconTitle "The last TITLE" -TrayIconSubtitle "Subtitle as end`nwith this new line`nand with this new line" -TrayIconFilePathTitleImage "C:\Temp\Hello.png" -TrayIconUserExitAllowed $true
 Start-Sleep -Seconds $pauseDur
-
-if (-not (Set-TrayIconState -State $false @Params)) {return}
-
-
-<#TEST
-Title: Software package name
-Subtitle: Install status and defer history of the package
-#>
+if (-not (Set-TrayIconState -Action Stop @Params -PassThru)) {return}
