@@ -42,26 +42,36 @@ Function Set-TrayIconState {
         Aliases:                     FilePathImage
         DataType:                    String
         Notes:                       Full path to the file
-                                     If the path do not exist the tray icon will hide the button.
+                                     If the path do not exist the tray show an error icon.
     .PARAMETER TrayIconFilePathTitleImage
         Aliases:                     FilePathTitleImage
         DataType:                    String
         Notes:                       Full path to the file
-                                     If the path do not exist the tray icon will hide the button.
+                                     If the path do not exist the tray icon will not show an icon on the left side of the title.
     .PARAMETER TrayIconUserExitAllowed
         Aliases:                     UserExitAllowed, UserExitEnabled
         DataType:                    Boolean
-        Notes:                       Tray icon will only update the file path if this value is set to true.
+        Notes:                       Will hide the exit button to close the tray icon
     .PARAMETER ClientScriptNoNewDataTimeoutInSeconds
         Aliases:                     TimeoutInSeconds, Timeout
         DataType:                    Int32
+        Notes:                       Seconds without a new timestamp from the memory mapped file channel (or a timestamp older than this amount of seconds)
     .PARAMETER ClientScriptReadingPauseInSeconds
         Aliases:                     PauseInSeconds, Pause
         DataType:                    Int32
+        Notes:                       Seconds of pause without reading the memory mapped file channel
     .PARAMETER ClientScriptTempDirectory
         Aliases:                     TempDirectory, TempDir
         DataType:                    String
         Notes:                       Path to create the client part script to show the tray icon
+    .PARAMETER ClientScriptTempFileName
+        Aliases:                     TempFileName, TempFile
+        DataType:                    String
+        Notes:                       Filename of the client part script to show the tray icon
+    .PARAMETER ClientScriptLogCreation
+        Aliases:                     LogCreation, Log
+        DataType:                    Switch
+        Notes:                       Enable log file creation for the client part script (path like client part script)
     .PARAMETER MmfName
         Aliases:                     Name
         DataType:                    String
@@ -70,9 +80,12 @@ Function Set-TrayIconState {
         Aliases:                     Scope
         DataType:                    String
         Notes:                       Scope of the MemoryMappedFile (Global or Local)
+    .PARAMETER WriteHost
+        DataType:                    Switch
+        Notes:                       Writing information to the console while running
     .PARAMETER PassThru
         DataType:                    Switch
-        Notes:                       Returning the result of the MemoryMappedFile writer.
+        Notes:                       Returning the result of the MemoryMappedFile writer
     .INPUTS
         No pipeline input or default value accepted (will be arguments order).
     .OUTPUTS
@@ -140,7 +153,6 @@ Function Set-TrayIconState {
         [ValidateSet('Local','Global')]                          
         [System.String]$MmfScope                                 = 'Local',
 
-        [Alias('Host')]
         [System.Management.Automation.SwitchParameter]$WriteHost,
 
         [System.Management.Automation.SwitchParameter]$PassThru
@@ -1235,7 +1247,7 @@ Function Set-MemoryMappedFile {
     Clear-Host
 
     # Data definitions
-    [System.Int32]$pauseInSeconds                = 3
+    [System.Int32]$pauseInSeconds                = 10
     [System.Collections.Hashtable]$Params        = @{
         TrayIconTitle                            = "Software Package"
         TrayIconSubtitle                         = "Initializing ..."
@@ -1251,15 +1263,13 @@ Function Set-MemoryMappedFile {
     # Start process
     if (-not (Set-TrayIconState -Action Start -PassThru -WriteHost -ClientScriptLogCreation @Params)) {return}
     Start-Sleep -Seconds $pauseInSeconds
-    Set-TrayIconState -Action Change -TrayIconTitle "First TITLE" -TrayIconSubtitle "First Subtitle"
+    Set-TrayIconState -Action Change -TrayIconTitle "First TITLE" -TrayIconSubtitle "First Subtitle" -TrayIconFilePathImage "C:\Temp\TestPackage\AppIcon.png"
     Start-Sleep -Seconds $pauseInSeconds
-    Set-TrayIconState -Action Change -TrayIconTitle "Install Google Chrome 1.2.3" -TrayIconSubtitle "Phase: Install application"
+    Set-TrayIconState -Action Change -TrayIconTitle "Install Mozilla Firefox 149.0" -TrayIconSubtitle "Phase: Install application" -TrayIconFilePathTitleImage "C:\Temp\TestPackage\Logo.png"
     Start-Sleep -Seconds $pauseInSeconds
-    Set-TrayIconState -Action Change -TrayIconTitle "First TITLE"  -TrayIconFilePathImage "C:\Temp\Hello.png"
+    Set-TrayIconState -Action Change -TrayIconTitle "This TITLE is loooooooooooooooooooooooooooooooooooooooooooooong" -TrayIconSubtitle "Invalid overview file path test" -TrayIconFilePathOverview "C:\Temp\TestPackage\YouShallNotPass.png"
     Start-Sleep -Seconds $pauseInSeconds
-    Set-TrayIconState -Action Change -TrayIconTitle "This TITLE is loooooooooooooooooooooooooooooooooooooooooooooog" -TrayIconSubtitle "First Subtitle"
-    Start-Sleep -Seconds $pauseInSeconds
-    Set-TrayIconState -Action Change -TrayIconTitle "The last TITLE" -TrayIconSubtitle "Subtitle as end`nwith this new line`nand with this new line" -TrayIconFilePathTitleImage "C:\Temp\Hello.png" -TrayIconUserExitAllowed $true
+    Set-TrayIconState -Action Change -TrayIconTitle "The last TITLE" -TrayIconSubtitle "Subtitle as end`nwith this new line`nand with this new line" -TrayIconUserExitAllowed $true
     Start-Sleep -Seconds $pauseInSeconds
     if (-not (Set-TrayIconState -Action Stop -PassThru -WriteHost)) {return}
 

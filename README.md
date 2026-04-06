@@ -52,26 +52,36 @@ Parameters:<br/>
   - Aliases:                     FilePathImage
   - DataType:                    String
   - Notes:                       Full path to the file<br/>
-								 If the path do not exist the tray icon will hide the button.
+								 If the path do not exist the tray show an error icon.
 - TrayIconFilePathTitleImage
   - Aliases:                     FilePathTitleImage
   - DataType:                    String
   - Notes:                       Full path to the file<br/>
-								 If the path do not exist the tray icon will hide the button.
+								 If the path do not exist the tray icon will not show an icon on the left side of the title.
 - TrayIconUserExitAllowed
   - Aliases:                     UserExitAllowed, UserExitEnabled
   - DataType:                    Boolean
-  - Notes:                       Tray icon will only update the file path if this value is set to true.
+  - Notes:                       Will hide the exit button to close the tray icon
 - ClientScriptNoNewDataTimeoutInSeconds
   - Aliases:                     TimeoutInSeconds, Timeout
   - DataType:                    Int32
+  - Notes:                       Seconds without a new timestamp from the memory mapped file channel (or a timestamp older than this amount of seconds)
 - ClientScriptReadingPauseInSeconds
   - Aliases:                     PauseInSeconds, Pause
   - DataType:                    Int32
+  - Notes:                       Seconds of pause without reading the memory mapped file channel
 - ClientScriptTempDirectory
   - Aliases:                     TempDirectory, TempDir
   - DataType:                    String
   - Notes:                       Path to create the client part script to show the tray icon
+- ClientScriptTempFileName
+  - Aliases:                     TempFileName, TempFile
+  - DataType:                    String
+  - Notes:                       Filename of the client part script to show the tray icon
+- ClientScriptLogCreation
+  - Aliases:                     LogCreation, Log
+  - DataType:                    Switch
+  - Notes:                       Enable log file creation for the client part script (path like client part script)
 - MmfName
   - Aliases:                     Name
   - DataType:                    String
@@ -80,9 +90,12 @@ Parameters:<br/>
   - Aliases:                     Scope
   - DataType:                    String
   - Notes:                       Scope of the MemoryMappedFile (Global or Local)
+- WriteHost
+  - DataType:                    Switch
+  - Notes:                       Writing information to the console while running
 - PassThru
   - DataType:                    Switch
-  - Notes:                       Returning the result of the MemoryMappedFile writer.
+  - Notes:                       Returning the result of the MemoryMappedFile writer
 
 
 Input:<br/>
