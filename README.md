@@ -105,10 +105,12 @@ Boolean for success
 
 ## Preview
 ### Initialization example
-![Initialization example](images/TrayIconPreview1.png) 
+![Initialization example](images/TrayIconPreview1.png)
 ### Firefox installation example
-![Firefox installation example](images/TrayIconPreview2.png) 
+![Firefox installation example](images/TrayIconPreview2.png)
 ### Long title and invalid path example
-![Long title and invalid path example](images/TrayIconPreview3.png) 
+![Long title and invalid path example](images/TrayIconPreview3.png)
 ### Multiple lines title example
-![Multiple lines title example](images/TrayIconPreview4.png) 
+![Multiple lines title example](images/TrayIconPreview4.png)
+### Mouseover example
+![Multiple lines title example](images/TrayIconPreview5.png)
